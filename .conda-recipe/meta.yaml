@@ -19,14 +19,13 @@ requirements:
   build:
     - microdrop >=2.4
     - microdrop-plugin-manager >=0.13
-    - paho-mqtt
+    - paho-mqtt-helpers
     - path_helpers
 
   run:
-    - conda-helpers
     - microdrop >=2.4
     - microdrop-plugin-manager >=0.13
-    - paho-mqtt
+    - paho-mqtt-helpers
     - path_helpers
 
 test:
