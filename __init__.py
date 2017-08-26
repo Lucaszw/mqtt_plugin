@@ -1,8 +1,10 @@
+import atexit
 import json
 import logging
 
 from microdrop.app_context import get_app, get_hub_uri
 from microdrop.plugin_helpers import get_plugin_info
+
 from microdrop.plugin_manager import (PluginGlobals, Plugin, IPlugin,
                                       implements, emit_signal)
 from microdrop.protocol import protocol_from_dict
@@ -45,16 +47,22 @@ class MqttPlugin(pmh.BaseMqttReactor, Plugin):
 
         if app.protocol is None: return
 
+        enabled_plugins = get_service_names(env='microdrop.managed') + \
+            get_service_names('microdrop')
+
+        print "ENABLED PLUGINS:::"
+        print enabled_plugins
+
         for i, s in enumerate(self.steps):
 
             if (i >= len(app.protocol.steps)):
                 app.protocol.insert_step(i-1)
 
             step = app.protocol.steps[i]
-
             for plugin_name, item in s.iteritems():
-                step.set_data(plugin_name, item)
-                emit_signal('on_step_options_changed', [plugin_name, i], interface=IPlugin)
+                if plugin_name in enabled_plugins:
+                    step.set_data(plugin_name, item)
+                    emit_signal('on_step_options_changed', [plugin_name, i], interface=IPlugin)
 
         # If self.steps is shorter then protocol steps, delete the last one
         if len(self.steps) < len(app.protocol.steps):
@@ -83,6 +91,8 @@ class MqttPlugin(pmh.BaseMqttReactor, Plugin):
         self._props["protocol"] = value
         app = get_app()
         protocol = protocol_from_dict(value)
+        print "PROTOCOL RETRIEVED FROM DICT:::"
+        print protocol
         app.protocol_controller.modified = True
         emit_signal("on_protocol_changed")
         app.protocol_controller.activate_protocol(protocol)
@@ -90,16 +100,21 @@ class MqttPlugin(pmh.BaseMqttReactor, Plugin):
     ###########################################################################
     # MicroDrop pyutilib plugin handlers
     # ==================================
+    def on_exit(self):
+        # TODO: FIX ME (This needs to be triggered by microdrop on exit)
+        self.mqtt_client.publish("microdrop/microdrop/plugin-exited","{}", retain=True)
+
     def on_connect(self, client, userdata, flags, rc):
-        # self.mqtt_client.subscribe("microdrop/dmf-device-ui/change-step")
-        # self.mqtt_client.subscribe("microdrop/dmf-device-ui/insert-step")
-        self.mqtt_client.subscribe("microdrop/dmf-device-ui/change-protocol-state")
-        self.mqtt_client.subscribe("microdrop/dmf-device-ui/change-repeat")
-        self.mqtt_client.subscribe("microdrop/data-controller/load-protocol")
-        self.mqtt_client.subscribe("microdrop/droplet-planning-plugin/step-complete")
-        self.mqtt_client.subscribe("microdrop/put/mqtt-plugin/state/steps")
-        self.mqtt_client.subscribe("microdrop/put/mqtt-plugin/state/protocol")
-        self.mqtt_client.subscribe("microdrop/put/mqtt-plugin/state/step-number")
+        # self.mqtt_client.subscribe("microdrop/dmf-device-ui/change-protocol-state")
+        # self.mqtt_client.subscribe("microdrop/dmf-device-ui/change-repeat")
+        # self.mqtt_client.subscribe("microdrop/data-controller/load-protocol")
+        # self.mqtt_client.subscribe("microdrop/droplet-planning-plugin/step-complete")
+        # self.mqtt_client.subscribe("microdrop/put/mqtt-plugin/state/steps")
+        # self.mqtt_client.subscribe("microdrop/put/mqtt-plugin/state/protocol")
+        # self.mqtt_client.subscribe("microdrop/put/mqtt-plugin/state/step-number")
+
+        self.mqtt_client.publish("microdrop/microdrop/plugin-started","{}", retain=True)
+        atexit.register(self.on_exit)
 
     def on_message(self, client, userdata, msg):
         '''
